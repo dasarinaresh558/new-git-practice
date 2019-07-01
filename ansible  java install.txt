@@ -1,0 +1,64 @@
+---
+- hosts: web-suse
+  become: true
+
+  vars:
+    user: hybris
+    support_user: support
+    download_url: http://download.oracle.com/otn-pub/java/jdk/8u5-b13/jdk-8u5-linux-x64.tar.gz
+    download_folder: /opt
+    java_name: "{{download_folder}}/jdk1.8.0_05"
+    java_archive: "{{download_folder}}/jdk-8u5-linux-x64.tar.gz"
+
+  tasks:
+    - zypper: name=apache2 state=present
+
+    - zypper: name=git-core state=present
+
+    - group:
+        name: "{{user}}"
+        state: present
+
+    - name: Allow {{user}} group to have passwordless sudo
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^%{{user}}'
+        line: '%{{user}} ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+
+    - user:
+        name: "{{user}}"
+        shell: /bin/bash
+        group: "{{user}}"
+        groups: "root"
+        append: yes
+    
+    - group:
+        name: "{{support_user}}"
+        state: present
+
+    - user:
+        name: "{{support_user}}"
+        shell: /bin/bash
+        groups: "{{support_user}}"
+        append: yes
+
+    #java installation--------
+
+    - name: Download Java
+      command: "wget -q -O {{java_archive}} --no-check-certificate --no-cookies --header 'Cookie: oraclelicense=accept-securebackup-cookie' {{download_url}} creates={{java_archive}}"
+
+    - name: Unpack archive
+      command: "tar -zxf {{java_archive}} -C {{download_folder}} creates={{java_name}}"
+
+    - name: Fix ownership
+      file: state=directory path={{java_name}} owner={{user}} group=root recurse=yes
+
+    - name: Make Java available for system
+      command: 'alternatives --install "/usr/bin/java" "java" "{{java_name}}/bin/java" 2000'
+
+    - name: Clean up
+      file: state=absent path={{java_archive}}
+
+    #java installation done--------
